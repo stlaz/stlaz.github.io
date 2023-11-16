@@ -1,7 +1,0 @@
-# config file for jekyll
-#
-# defaults are described at https://jekyllrb.com/docs/configuration/default/
-
-# I got this by following https://docs.github.com/en/pages/setting-up-a-github-pages-site-with-jekyll/adding-a-theme-to-your-github-pages-site-using-jekyll
-# but it might make more sense to find a way to copy https://github.com/jekyll/minima later
-theme: jekyll-theme-minima
