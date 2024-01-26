@@ -74,7 +74,7 @@ parameters, reflecting what PKCS11 needs in order to function properly;
    exist.
 1. An identifier of the slot with a token you want to be working with - there can be more than
    one present at a time but you usually only need to pick one (as defined by the
-   `C_OpenSession()` [interface](https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755805).
+   `C_OpenSession()` [interface](https://docs.oasis-open.org/pkcs11/pkcs11-base/v2.40/errata01/os/pkcs11-base-v2.40-errata01-os-complete.html#_Toc441755805)).
 1. User pin to authenticate the user for the operations they are about to do.
 
 An example with OpenSC's `pkcs11-tool`:
@@ -103,9 +103,118 @@ should be used for the keygen operation.
 
 ## PKCS#11 tooling
 
-TODO:
-- pkcs11-tool (openSC)
-- libsofthsm
+It's always useful to be looking around tools that deal in the same problem domain
+when dealing with standards.
+
+### OpenSC
+
+During my own attempts on PKCS11, I found `pkcs11-tool` to be most helpful when
+figuring out that certain operations are even possible, and thus if it's just me
+reading the specification wrong or if there's something wonky in a given PKCS11
+module implementation.
+
+The `pkcs11-tool` is distributed along with OpenSC packages, most likely on any Linux
+distro, or you can get the sources at [the OpenSC GitHub page](https://github.com/OpenSC/OpenSC).
+
+The `man pkcs11-tool` explains the usage pretty well, you can see an example
+in the previous section.
+
+### SoftHSMv2
+
+Another thing that one needs when dealing with PKCS11 is the actual tokens that
+you can test with.
+
+I originally started with YubiKey 4 nano that I've been keeping unused for a long
+time. After a couple of unsuccessful tries, even though I managed to generate
+a key pair on it in the end, I decided to rather look elsewhere. The device does
+not seem to be fit for use with PKCS11, and many operations appear unsupported.
+
+To be fair, I don't think the YubiKey device I was using was ever supposed to be
+used the way I was trying to expose.
+
+I ended up with SoftHSMv2 which is a project I knew from times when I was learning
+about DNSSEC in FreeIPA where it used to be leveraged for testing.
+
+SoftHSMv2 allows you to simulate a HSM from software, so that you don't have to
+invest into a real token that is still quite expensive if you just want to fool
+around.
+
+The usage is quite simple. First you list all slots where you can initialize tokens:
+```sh
+$ softhsm2-util --show-slots
+Available slots:
+Slot 0
+    Slot info:
+        Description:      SoftHSM slot ID 0x0
+        Manufacturer ID:  SoftHSM project
+        Hardware version: 2.6
+        Firmware version: 2.6
+        Token present:    yes
+    Token info:
+        Manufacturer ID:  SoftHSM project
+        Model:            SoftHSM v2
+        Hardware version: 2.6
+        Firmware version: 2.6
+        Serial number:
+        Initialized:      no
+        User PIN init.:   no
+        Label:
+```
+
+You then use the slot to initialize a token:
+```sh
+$ softhsm2-util --slot 0 --init-token --so-pin 12345678 --pin 123456 --label "test"
+The token has been initialized and is reassigned to slot 607694088
+```
+
+This creates a token at slot `607694088` (randomly assigned) that you can then
+use as you please. I chose passwords `123456` for normal user and `12345678` for
+the privileged Security Officer.
+
+The following example uses the command described in the "PKCS#11 application structure" section,
+and then shows that objects were generated on the software token. It also shows
+that different objects are visible based on user authentication.
+
+```sh
+$ pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so \
+    --login --login-type user \
+    --keypairgen --id 1 --key-type rsa:2048 \
+    --slot 607694088
+Logging in to "test".
+Please enter User PIN:
+Key pair generated:
+Private Key Object; RSA
+  label:
+  ID:         01
+  Usage:      decrypt, sign, signRecover, unwrap
+  Access:     sensitive, always sensitive, never extractable, local
+Public Key Object; RSA 2048 bits
+  label:
+  ID:         01
+  Usage:      encrypt, verify, verifyRecover, wrap
+  Access:     local
+$ pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so -O --slot 607694088
+Public Key Object; RSA 2048 bits
+  label:
+  ID:         01
+  Usage:      encrypt, verify, verifyRecover, wrap
+  Access:     local
+$ pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so -O \
+    --login --login-type user --slot 607694088
+Logging in to "test".
+Please enter User PIN:
+Public Key Object; RSA 2048 bits
+  label:
+  ID:         01
+  Usage:      encrypt, verify, verifyRecover, wrap
+  Access:     local
+Private Key Object; RSA
+  label:
+  ID:         01
+  Usage:      decrypt, sign, signRecover, unwrap
+  Access:     sensitive, always sensitive, never extractable, local
+```
+
 
 ## PKCS#11 debugging
 
