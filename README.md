@@ -26,4 +26,6 @@ run:
 
 ```bash
 bundle install
+# bundle add webrick - this may be needed to get the server started
+bundle exec jekyll serve
 ```
