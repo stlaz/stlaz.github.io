@@ -98,7 +98,7 @@ There are three types of users defined by PKCS11, those are
 Generation of cryptomaterial typically requires to be of type "user". Interestingly,
 when testing with my YubiKey 4 nano, "Security Officer" authentication was required there.
 
-The above command then specifies that a token in the slot 1035341506 `--slot 1035341506`
+The above command then specifies that a token in the slot 1035341506 (`--slot 1035341506`)
 should be used for the keygen operation.
 
 ## PKCS#11 tooling
@@ -223,7 +223,8 @@ a situation where you think you're following the specification properly but
 your token is still returning errors.
 
 In those cases, I found it useful to use the `pkcs11-tool` as a reference implementation.
-OpenSC aslo ships with a `pkcs11-spy.so` module. Using these two helps you not only to
+OpenSC aslo ships with a `pkcs11-spy.so` module that allows displaying the PKCS11 communication.
+Using these two helps you not only to 
 make sure that what you're trying to do is possible with the token, but you can actually
 see how your PKCS11 is interacting with the token.
 
