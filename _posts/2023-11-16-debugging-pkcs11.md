@@ -79,7 +79,7 @@ parameters, reflecting what PKCS11 needs in order to function properly;
 
 An example with OpenSC's `pkcs11-tool`:
 ```
-pkcs11-tool --modul /usr/lib/softhsm/libsofthsm2.so \
+pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so \
     --login --login-type user \
     --keypairgen --id 1 --key-type rsa:2048 \
     --slot 1035341506
@@ -216,7 +216,221 @@ Private Key Object; RSA
 ```
 
 
-## PKCS#11 debugging
+## PKCS#11 introspection
 
-TODO:
-- PKCS11SPY
+When writing an application that's using PKCS11 directly, you may end up in
+a situation where you think you're following the specification properly but
+your token is still returning errors.
+
+In those cases, I found it useful to use the `pkcs11-tool` as a reference implementation.
+OpenSC aslo ships with a `pkcs11-spy.so` module. Using these two helps you not only to
+make sure that what you're trying to do is possible with the token, but you can actually
+see how your PKCS11 is interacting with the token.
+
+In order to work with the `pkcs11-spy.so` module, you need to set the `PKCS11SPY` environment
+to the PKCS11 module that you would otherwise use to communicate with your token.
+In your application, you then use the `pkcs11-spy.so` module instead of the one you'd normally
+use.
+
+The examle below shows extracting a pub key with the SoftHSM2 PKCS11 module. The pub key is then
+parsed by `openssl` to show its attributes.
+
+<details>
+<summary><b>Click here</b> to view the example. It's quite long so I hid it under this expander.</summary>
+{% highlight sh %}
+$ PKCS11SPY=/usr/lib/softhsm/libsofthsm2.so pkcs11-tool --module /usr/lib/pkcs11/pkcs11-spy.so \
+    --login --login-type user \
+    --slot 607694088 --read-object \
+    --id 01 --type pubkey \
+    -o pubkey.der
+
+
+*************** OpenSC PKCS#11 spy *****************
+Loaded: "/usr/lib/softhsm/libsofthsm2.so"
+
+0: C_GetInterface
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.286
+[compat]
+[in] pInterfaceName 000056238d873ca9 / 7
+    00000000  50 4B 43 53 20 31 31                             PKCS 11
+[in] pVersion = NULL
+[in] flags =
+Returned:  0 CKR_OK
+
+1: C_Initialize
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.286
+[in] pInitArgs = (nil)
+Returned:  0 CKR_OK
+
+2: C_GetSlotList
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.287
+[in] tokenPresent = 0x0
+[out] pSlotList:
+Count is 2
+[out] *pulCount = 0x2
+Returned:  0 CKR_OK
+
+3: C_GetSlotList
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.287
+[in] tokenPresent = 0x0
+[out] pSlotList:
+Slot 607694088
+Slot 1
+[out] *pulCount = 0x2
+Returned:  0 CKR_OK
+
+4: C_OpenSession
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.287
+[in] slotID = 0x2438ad08
+[in] flags = 0x4
+[in] pApplication = (nil)
+[in] Notify = (nil)
+[out] *phSession = 0x1
+Returned:  0 CKR_OK
+
+5: C_GetTokenInfo
+P:21960; T:0x126605819501440 2024-02-29 12:33:33.287
+[in] slotID = 0x2438ad08
+[out] pInfo:
+      label:                  'test                            '
+      manufacturerID:         'SoftHSM project                 '
+      model:                  'SoftHSM v2      '
+      serialNumber:           'd623f2572438ad08'
+      ulMaxSessionCount:       0
+      ulSessionCount:          -1
+      ulMaxRwSessionCount:     0
+      ulRwSessionCount:        -1
+      ulMaxPinLen:             255
+      ulMinPinLen:             4
+      ulTotalPublicMemory:     -1
+      ulFreePublicMemory:      -1
+      ulTotalPrivateMemory:    -1
+      ulFreePrivateMemory:     -1
+      hardwareVersion:         2.6
+      firmwareVersion:         2.6
+      time:                   '2024022911333300'
+      flags:                   42d
+        CKF_RNG
+        CKF_LOGIN_REQUIRED
+        CKF_USER_PIN_INITIALIZED
+        CKF_RESTORE_KEY_NOT_NEEDED
+        CKF_TOKEN_INITIALIZED
+Returned:  0 CKR_OK
+Logging in to "test".
+Please enter User PIN:
+
+6: C_Login
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.119
+[in] hSession = 0x1
+[in] userType = CKU_USER
+[in] pPin[ulPinLen] 000056238e35b760 / 6
+    00000000  31 32 33 34 35 36                                123456
+Returned:  0 CKR_OK
+
+7: C_FindObjectsInit
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.127
+[in] hSession = 0x1
+[in] pTemplate[2]:
+    CKA_CLASS             CKO_PUBLIC_KEY
+    CKA_ID                000056238d880340 / 1
+    00000000  01                                               .
+Returned:  0 CKR_OK
+
+8: C_FindObjects
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.127
+[in] hSession = 0x1
+[in] ulMaxObjectCount = 0x1
+[out] ulObjectCount = 0x1
+Object 0x2 matches
+Returned:  0 CKR_OK
+
+9: C_FindObjectsFinal
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.128
+[in] hSession = 0x1
+Returned:  0 CKR_OK
+
+10: C_GetAttributeValue
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.128
+[in] hSession = 0x1
+[in] hObject = 0x2
+[in] pTemplate[1]:
+    CKA_KEY_TYPE          00007ffe63e29878 / 8
+[out] pTemplate[1]:
+    CKA_KEY_TYPE          CKK_RSA
+Returned:  0 CKR_OK
+
+11: C_GetAttributeValue
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.128
+[in] hSession = 0x1
+[in] hObject = 0x2
+[in] pTemplate[1]:
+    CKA_MODULUS           0000000000000000 / 0
+[out] pTemplate[1]:
+    CKA_MODULUS           0000000000000000 / 256
+Returned:  0 CKR_OK
+
+12: C_GetAttributeValue
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.128
+[in] hSession = 0x1
+[in] hObject = 0x2
+[in] pTemplate[1]:
+    CKA_MODULUS           000056238e396400 / 256
+[out] pTemplate[1]:
+    CKA_MODULUS           000056238e396400 / 256
+    00000000  A1 B8 EA AE F9 2A 2D 6E F3 D6 A3 20 29 F9 9D 5D  .....*-n... )..]
+    00000010  EA BB A6 0B 2B 1A 49 CA 5C 54 45 08 78 03 4F D4  ....+.I.\TE.x.O.
+    00000020  7F 54 5F 9A EB 5B D6 54 27 A0 BD 74 49 5B 34 2F  T_..[.T'..tI[4/
+    00000030  E2 52 C4 31 78 73 1B DB 2F 91 CD 49 E2 E7 3B 97  .R.1xs../..I..;.
+    00000040  9E 3F DE 82 25 FC E2 B0 21 C7 43 D6 8F 5D 4B EB  .?..%...!.C..]K.
+    00000050  87 BC 79 1A 31 40 6E 52 16 6C FA 0E 89 01 DC 09  ..y.1@nR.l......
+    00000060  C7 D3 62 81 30 DC 98 30 18 86 ED 09 D7 9A 05 C1  ..b.0..0........
+    00000070  7F BB 8F 62 39 EC 06 C1 46 82 CB 1B E2 50 6E 83  ..b9...F....Pn.
+    00000080  22 37 76 48 36 BA 08 D2 C8 84 96 6F 9A 08 AC B8  "7vH6......o....
+    00000090  B0 68 90 1D 53 42 A7 05 D4 F0 31 61 98 67 D1 3B  .h..SB....1a.g.;
+    000000A0  C3 27 8C 60 27 59 DD 47 0D 09 EF 21 08 07 30 53  .'.`'Y.G...!..0S
+    000000B0  5F 56 52 F8 AC 43 08 FF 65 87 BC 14 E4 5B 3E 49  _VR..C..e....[>I
+    000000C0  29 7D 67 1E 56 DE A5 64 06 C6 E8 DB 33 87 57 41  )}g.V..d....3.WA
+    000000D0  A4 AF F2 D0 F1 36 7B B5 D8 73 3E 70 DD F2 26 63  .....6{..s>p..&c
+    000000E0  90 4B 3E FB 37 6B 30 40 61 D4 65 22 8D 5A B2 C0  .K>.7k0@a.e".Z..
+    000000F0  46 27 43 AD 99 50 D8 9A 0F 0D 20 EB 29 8A F6 1F  F'C..P.... .)...
+Returned:  0 CKR_OK
+
+13: C_GetAttributeValue
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.128
+[in] hSession = 0x1
+[in] hObject = 0x2
+[in] pTemplate[1]:
+    CKA_PUBLIC_EXPONENT   0000000000000000 / 0
+[out] pTemplate[1]:
+    CKA_PUBLIC_EXPONENT   0000000000000000 / 3
+Returned:  0 CKR_OK
+
+14: C_GetAttributeValue
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.129
+[in] hSession = 0x1
+[in] hObject = 0x2
+[in] pTemplate[1]:
+    CKA_PUBLIC_EXPONENT   000056238e3965d0 / 3
+[out] pTemplate[1]:
+    CKA_PUBLIC_EXPONENT   000056238e3965d0 / 3
+    00000000  01 00 01                                         ...
+Returned:  0 CKR_OK
+
+15: C_CloseSession
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.132
+[in] hSession = 0x1
+Returned:  0 CKR_OK
+
+16: C_Finalize
+P:21960; T:0x126605819501440 2024-02-29 12:33:35.132
+Returned:  0 CKR_OK
+
+$ openssl asn1parse -in ./pubkey.der -inform der
+    0:d=0  hl=4 l= 290 cons: SEQUENCE
+    4:d=1  hl=2 l=  13 cons: SEQUENCE
+    6:d=2  hl=2 l=   9 prim: OBJECT            :rsaEncryption
+   17:d=2  hl=2 l=   0 prim: NULL
+   19:d=1  hl=4 l= 271 prim: BIT STRING
+{% endhighlight %}
+
+</details>
